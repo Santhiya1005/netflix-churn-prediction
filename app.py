@@ -95,11 +95,6 @@ city = st.selectbox(
 
 st.markdown("</div>", unsafe_allow_html=True)
 
-# SPACE BETWEEN INPUT & RESULT
-st.markdown("<br><br><br>", unsafe_allow_html=True)
-
-# ---------------- DATA PREP ----------------
-
 # ---------------- DATA PREP ----------------
 input_data = {col: 0 for col in feature_columns}
 
