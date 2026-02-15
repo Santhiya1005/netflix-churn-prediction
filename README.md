@@ -1,11 +1,11 @@
-🎬 Netflix Customer Churn Prediction
+Netflix Customer Churn Prediction
 
 A Machine Learning web application that predicts whether a Netflix customer is likely to churn based on demographic and subscription details.
 Built using Python, Scikit-learn, and Streamlit with a Netflix-style UI.
 
 🚀 Live Demo
 
-👉 (Add your Streamlit app link here after deployment)
+https://netflixchurnprediction.streamlit.app/
 
 📌 Features
 
