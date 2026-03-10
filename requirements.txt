@@ -1,6 +1,15 @@
+<<<<<<< HEAD
 streamlit==1.19.0
+=======
+streamlit>=1.32.0
+>>>>>>> e67600ee8e64e4aeaa44c6efd0a434f9831f4dde
 pandas
 numpy
 scikit-learn
 joblib
+<<<<<<< HEAD
 altair==4.2.2
+=======
+matplotlib
+seaborn
+>>>>>>> e67600ee8e64e4aeaa44c6efd0a434f9831f4dde

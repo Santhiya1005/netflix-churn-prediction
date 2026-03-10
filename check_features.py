@@ -1,10 +1,17 @@
 import joblib
+import pickle
 
-feature_columns = joblib.load("feature_columns.pkl")
+def load_features():
+    try:
+        cols = joblib.load("feature_columns.pkl")
+    except Exception:
+        with open("feature_columns.pkl", "rb") as f:
+            cols = pickle.load(f)
+    return cols
 
-print("Total features:", len(feature_columns))
-print("Some features:", feature_columns[:50])  # first 50 columns
+cols = load_features()
 
-city_columns = [col for col in feature_columns if col.startswith("City_")]
-print("Number of city features:", len(city_columns))
-print("Example city features:", city_columns[:10])
+print("Total feature columns:", len(cols))
+print("-" * 50)
+for i, col in enumerate(cols, start=1):
+    print(f"{i}. {col}")
