@@ -5,19 +5,25 @@ import joblib
 import pickle
 from pathlib import Path
 import re
+import os
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
     page_title="Netflix Churn Retention Dashboard",
     page_icon="🎬",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
 # ---------------- CUSTOM CSS ----------------
 st.markdown("""
 <style>
-header[data-testid="stHeader"] {display: none;}
-div[data-testid="stToolbar"] {display: none;}
+header[data-testid="stHeader"] {
+    background: transparent;
+}
+div[data-testid="stToolbar"] {
+    right: 1rem;
+}
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 
@@ -85,36 +91,6 @@ section[data-testid="stSidebar"] * {
     line-height: 1.6;
 }
 
-div[data-testid="metric-container"] {
-    background: #161616 !important;
-    border: 1px solid rgba(255,255,255,0.10) !important;
-    border-radius: 16px !important;
-    padding: 1rem !important;
-}
-div[data-testid="metric-container"] * {
-    color: #ffffff !important;
-    opacity: 1 !important;
-}
-div[data-testid="metric-container"] label,
-div[data-testid="metric-container"] [data-testid="stMetricLabel"],
-div[data-testid="metric-container"] p {
-    color: #f2f2f2 !important;
-    opacity: 1 !important;
-    font-size: 1rem !important;
-    font-weight: 600 !important;
-}
-div[data-testid="metric-container"] [data-testid="stMetricValue"] {
-    color: #ffffff !important;
-    opacity: 1 !important;
-    font-size: 2.2rem !important;
-    font-weight: 800 !important;
-    line-height: 1.2 !important;
-}
-div[data-testid="metric-container"] [data-testid="stMetricDelta"] {
-    color: #ffffff !important;
-    opacity: 1 !important;
-}
-
 .stSelectbox label,
 .stNumberInput label,
 .stSlider label,
@@ -123,6 +99,7 @@ div[data-testid="metric-container"] [data-testid="stMetricDelta"] {
     opacity: 1 !important;
     font-weight: 600 !important;
 }
+
 div[data-baseweb="select"] > div,
 div[data-baseweb="input"] > div {
     background-color: #181818 !important;
@@ -130,15 +107,9 @@ div[data-baseweb="input"] > div {
     border-radius: 10px !important;
     color: #FFFFFF !important;
 }
+
 div[data-baseweb="select"] span,
 div[data-baseweb="input"] input {
-    color: #FFFFFF !important;
-    opacity: 1 !important;
-}
-button[kind="secondary"] {
-    color: #FFFFFF !important;
-}
-.stSlider span {
     color: #FFFFFF !important;
     opacity: 1 !important;
 }
@@ -166,9 +137,6 @@ button[kind="secondary"] {
 
 [data-testid="stAlert"] {
     border-radius: 12px;
-}
-[data-testid="stMarkdownContainer"] {
-    color: #ffffff !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -213,7 +181,6 @@ def load_feature_columns():
             cols = cols.tolist()
         elif isinstance(cols, np.ndarray):
             cols = cols.tolist()
-
         return list(cols)
     return []
 
@@ -249,23 +216,6 @@ def churn_numeric(series):
         "churned": 1, "stayed": 0
     })
 
-def fill_if_exists(input_df, col_name, value):
-    if col_name in input_df.columns:
-        input_df[col_name] = value
-
-def set_one_hot(input_df, prefixes, selected_value):
-    selected_value = str(selected_value).strip().lower()
-    if isinstance(prefixes, str):
-        prefixes = [prefixes]
-
-    for prefix in prefixes:
-        prefix_lower = prefix.lower().strip() + "_"
-        for col in input_df.columns:
-            col_lower = col.lower().strip()
-            if col_lower.startswith(prefix_lower):
-                value_part = col.split("_", 1)[1].strip().lower()
-                input_df[col] = 1 if value_part == selected_value else 0
-
 def styled_card(title, text):
     st.markdown(
         f"""
@@ -276,6 +226,7 @@ def styled_card(title, text):
         """,
         unsafe_allow_html=True
     )
+
 def metric_card(label, value):
     st.markdown(
         f"""
@@ -291,25 +242,24 @@ def metric_card(label, value):
                 font-size:16px;
                 font-weight:600;
                 margin-bottom:10px;
-                opacity:1;
             ">{label}</div>
             <div style="
                 color:#ffffff;
                 font-size:42px;
                 font-weight:800;
                 line-height:1.1;
-                opacity:1;
             ">{value}</div>
         </div>
         """,
         unsafe_allow_html=True
     )
+
 def risk_label(prob):
     if prob >= 0.75:
-        return "High Risk 🔴"
+        return "High Risk"
     elif prob >= 0.45:
-        return "Medium Risk 🟠"
-    return "Low Risk 🟢"
+        return "Medium Risk"
+    return "Low Risk"
 
 def retention_action(prob, contract, tenure, monthly_charges):
     suggestions = []
@@ -332,23 +282,35 @@ def retention_action(prob, contract, tenure, monthly_charges):
 
     return suggestions
 
-def get_expected_columns():
-    """
-    Prefer scaler's expected columns.
-    If scaler doesn't expose them, use model's feature_names_in_.
-    Else fall back to feature_columns.pkl.
-    """
+def get_prediction_columns():
     if scaler is not None and hasattr(scaler, "feature_names_in_"):
         return list(scaler.feature_names_in_)
     if model is not None and hasattr(model, "feature_names_in_"):
         return list(model.feature_names_in_)
     return list(feature_columns)
 
+def fill_if_exists(input_df, col_name, value):
+    if col_name in input_df.columns:
+        input_df.at[0, col_name] = value
+
+def set_one_hot(input_df, prefixes, selected_value):
+    selected_value = str(selected_value).strip().lower()
+    if isinstance(prefixes, str):
+        prefixes = [prefixes]
+
+    for prefix in prefixes:
+        prefix_lower = prefix.lower().strip() + "_"
+        for col in input_df.columns:
+            col_lower = col.lower().strip()
+            if col_lower.startswith(prefix_lower):
+                value_part = col.split("_", 1)[1].strip().lower()
+                input_df.at[0, col] = 1 if value_part == selected_value else 0
+
 def build_input_from_form(
     gender, age, tenure, monthly_charges, total_charges,
     contract, payment_method, internet_service, paperless_billing
 ):
-    expected_columns = get_expected_columns()
+    expected_columns = get_prediction_columns()
     input_df = pd.DataFrame([np.zeros(len(expected_columns))], columns=expected_columns)
 
     under_30 = 1 if age < 30 else 0
@@ -360,29 +322,22 @@ def build_input_from_form(
     direct_map = {
         "Age": age,
         "age": age,
-
         "Under 30": under_30,
         "Under30": under_30,
-
         "Senior Citizen": senior_citizen,
         "SeniorCitizen": senior_citizen,
-
         "Married": married,
         "Dependents": dependents,
         "Number of Dependents": number_of_dependents,
         "NumberOfDependents": number_of_dependents,
-
         "Tenure": tenure,
         "tenure": tenure,
-
         "Monthly Charges": monthly_charges,
         "MonthlyCharges": monthly_charges,
         "Monthly Charge": monthly_charges,
-
         "Total Charges": total_charges,
         "TotalCharges": total_charges,
         "Total Charge": total_charges,
-
         "Paperless Billing": int(paperless_billing),
         "PaperlessBilling": int(paperless_billing)
     }
@@ -391,9 +346,9 @@ def build_input_from_form(
         fill_if_exists(input_df, col_name, value)
 
     if "Gender" in input_df.columns:
-        input_df["Gender"] = 1 if gender == "Male" else 0
+        input_df.at[0, "Gender"] = 1 if gender == "Male" else 0
     if "gender" in input_df.columns:
-        input_df["gender"] = 1 if gender == "Male" else 0
+        input_df.at[0, "gender"] = 1 if gender == "Male" else 0
 
     set_one_hot(input_df, ["Gender", "gender"], gender)
     set_one_hot(input_df, ["Contract", "contract"], contract)
@@ -404,51 +359,89 @@ def build_input_from_form(
     return input_df
 
 def predict_customer(input_df):
-    """
-    Robust prediction pipeline:
-    1. Align to scaler expected columns if available
-    2. Scale if scaler exists
-    3. Align to model expected columns if available
-    4. Predict probability
-    """
-    X = input_df.copy()
-
-    # Step 1: scale if possible
     if scaler is not None:
-        if hasattr(scaler, "feature_names_in_"):
-            scaler_cols = list(scaler.feature_names_in_)
-            X_for_scaler = X.reindex(columns=scaler_cols, fill_value=0)
+        scaler_cols = list(scaler.feature_names_in_) if hasattr(scaler, "feature_names_in_") else list(input_df.columns)
+        X = input_df.reindex(columns=scaler_cols, fill_value=0)
+        X_scaled = scaler.transform(X)
+    else:
+        X_scaled = input_df.values
+
+    proba = model.predict_proba(X_scaled)[0]
+    classes = list(model.classes_)
+    churn_index = classes.index(1)
+    probability = float(proba[churn_index])
+    prediction = 1 if probability >= 0.5 else 0
+
+    return probability, prediction
+
+# ---------------- AUTH HELPERS ----------------
+def init_auth_state():
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+    if "user_role" not in st.session_state:
+        st.session_state.user_role = None
+    if "username" not in st.session_state:
+        st.session_state.username = None
+
+def check_login(username, password):
+    try:
+        admin_username = st.secrets["auth"]["admin_username"]
+        admin_password = st.secrets["auth"]["admin_password"]
+        employee_username = st.secrets["auth"]["employee_username"]
+        employee_password = st.secrets["auth"]["employee_password"]
+    except Exception:
+        admin_username = "admin"
+        admin_password = "admin123"
+        employee_username = "employee"
+        employee_password = "emp123"
+
+    if username == admin_username and password == admin_password:
+        return True, "Admin"
+    elif username == employee_username and password == employee_password:
+        return True, "Employee"
+    else:
+        return False, None
+
+def logout():
+    st.session_state.authenticated = False
+    st.session_state.user_role = None
+    st.session_state.username = None
+
+def login_ui():
+    st.markdown('<div class="badge">NETFLIX ANALYTICS</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-title">Login to Dashboard</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="sub-text">Please enter your credentials to access the churn retention dashboard.</div>',
+        unsafe_allow_html=True
+    )
+
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown('<div class="card-title">🔐 User Authentication</div>', unsafe_allow_html=True)
+
+    with st.form("login_form"):
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        login_btn = st.form_submit_button("Login")
+
+    if login_btn:
+        ok, role = check_login(username, password)
+        if ok:
+            st.session_state.authenticated = True
+            st.session_state.user_role = role
+            st.session_state.username = username
+            st.success(f"Login successful! Welcome, {role}.")
+            st.rerun()
         else:
-            X_for_scaler = X
+            st.error("Invalid username or password.")
 
-        try:
-            scaled = scaler.transform(X_for_scaler)
-            if hasattr(scaler, "feature_names_in_"):
-                X_scaled_df = pd.DataFrame(scaled, columns=list(scaler.feature_names_in_))
-            else:
-                X_scaled_df = pd.DataFrame(scaled)
-        except Exception:
-            # fallback without scaling
-            X_scaled_df = X
-    else:
-        X_scaled_df = X
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    # Step 2: align to model input
-    if model is not None and hasattr(model, "feature_names_in_"):
-        model_cols = list(model.feature_names_in_)
-        X_for_model = X_scaled_df.reindex(columns=model_cols, fill_value=0)
-    else:
-        X_for_model = X_scaled_df
+# ---------------- AUTH CHECK ----------------
+init_auth_state()
 
-    # Step 3: probability
-    if hasattr(model, "predict_proba"):
-        prob = float(model.predict_proba(X_for_model)[0][1])
-    else:
-        pred = model.predict(X_for_model)[0]
-        prob = float(pred)
-
-    pred_label = 1 if prob >= 0.5 else 0
-    return prob, pred_label, X_for_model
+if not st.session_state.authenticated:
+    login_ui()
+    st.stop()
 
 # ---------------- TITLE ----------------
 st.markdown('<div class="badge">NETFLIX ANALYTICS</div>', unsafe_allow_html=True)
@@ -459,12 +452,22 @@ st.markdown(
 )
 
 # ---------------- SIDEBAR ----------------
-role = st.sidebar.selectbox("Choose View", ["Admin", "Employee"])
+st.sidebar.markdown("### 👤 User Session")
+st.sidebar.write(f"**Logged in as:** {st.session_state.username}")
+st.sidebar.write(f"**Role:** {st.session_state.user_role}")
+
+if st.sidebar.button("Logout"):
+    logout()
+    st.rerun()
+
 st.sidebar.markdown("---")
+
+role = st.session_state.user_role
+
 st.sidebar.write("**Artifacts loaded:**")
 st.sidebar.write(f"Model: {'✅' if model is not None else '❌'}")
 st.sidebar.write(f"Scaler: {'✅' if scaler is not None else '❌'}")
-st.sidebar.write(f"Features: {'✅' if len(feature_columns) > 0 else '❌'}")
+st.sidebar.write(f"Features file: {'✅' if len(feature_columns) > 0 else '❌'}")
 st.sidebar.write(f"Dataset: {'✅' if not df.empty else '❌'}")
 
 # ---------------- ADMIN VIEW ----------------
@@ -638,22 +641,26 @@ elif role == "Employee":
         )
 
         try:
-            probability, prediction, model_input = predict_customer(input_df)
+            expected_cols = joblib.load("feature_columns.pkl")
+            input_df = input_df.reindex(columns=expected_cols, fill_value=0)
+
+            X_scaled = scaler.transform(input_df)
+            proba = model.predict_proba(X_scaled)[0]
+            classes = list(model.classes_)
+
+            churn_index = classes.index(1)
+            probability = float(proba[churn_index])
+            prediction = 1 if probability >= 0.5 else 0
             prediction_failed = False
-        except Exception:
+
+        except Exception as e:
             probability = 0.0
             prediction = 0
-            model_input = input_df.copy()
             prediction_failed = True
+            st.warning(f"Prediction failed: {e}")
 
         risk = risk_label(probability)
         suggestions = retention_action(probability, contract, tenure, monthly_charges)
-
-        if prediction_failed:
-            st.warning(
-                "Prediction could not be completed with the current model artifacts. "
-                "The model, scaler, and saved feature set are likely from different training versions."
-            )
 
         st.markdown("## 📌 Prediction Result")
         a, b, c = st.columns(3)
@@ -664,7 +671,9 @@ elif role == "Employee":
         with c:
             metric_card("Risk Level", risk)
 
-        if prediction == 1:
+        if prediction_failed:
+            st.warning("Prediction could not be completed correctly. Please verify the latest saved artifacts.")
+        elif prediction == 1:
             st.error("The customer has a high probability of churn.")
         else:
             st.success("The customer is likely to stay.")
@@ -687,11 +696,10 @@ elif role == "Employee":
         st.dataframe(summary_df, use_container_width=True)
 
         with st.expander("Show model input details"):
-            st.write("Expected columns used for prediction:")
-            st.write(list(model_input.columns))
-            non_zero = [col for col in model_input.columns if model_input.iloc[0][col] != 0]
-            st.write("Non-zero features:", non_zero)
-            st.write(model_input)
+            st.write("Columns used for prediction:", list(input_df.columns))
+            non_zero_cols = [col for col in input_df.columns if input_df.iloc[0][col] != 0]
+            st.write("Non-zero columns:", non_zero_cols)
+            st.write(input_df)
 
 # ---------------- FOOTER ----------------
 st.markdown("---")
