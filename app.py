@@ -5,6 +5,7 @@ import joblib
 import pickle
 from pathlib import Path
 import re
+import os
 import sqlite3
 
 # ---------------- DATABASE SETUP ----------------
@@ -384,16 +385,10 @@ def init_auth_state():
         st.session_state.username = None
 
 def check_login(username, password):
-    try:
-        admin_username = st.secrets["auth"]["admin_username"]
-        admin_password = st.secrets["auth"]["admin_password"]
-        employee_username = st.secrets["auth"]["employee_username"]
-        employee_password = st.secrets["auth"]["employee_password"]
-    except Exception:
-        admin_username = "admin"
-        admin_password = "admin123"
-        employee_username = "employee"
-        employee_password = "emp123"
+    admin_username = os.getenv("admin_username", "admin")
+    admin_password = os.getenv("admin_password", "admin123")
+    employee_username = os.getenv("employee_username", "employee")
+    employee_password = os.getenv("employee_password", "emp123")
 
     if username == admin_username and password == admin_password:
         return True, "Admin"
