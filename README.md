@@ -5,7 +5,7 @@ Built using Python, Scikit-learn, and Streamlit with a Netflix-style UI.
 
 🚀 Live Demo
 
-https://netflixchurnprediction.streamlit.app/
+https://netflix-churn-prediction-0fh8.onrender.com
 
 📌 Features
 
