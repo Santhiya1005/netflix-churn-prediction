@@ -5,7 +5,23 @@ import joblib
 import pickle
 from pathlib import Path
 import re
-import os
+import sqlite3
+
+# ---------------- DATABASE SETUP ----------------
+conn = sqlite3.connect("churn.db", check_same_thread=False)
+cursor = conn.cursor()
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS predictions (
+    age INTEGER,
+    tenure INTEGER,
+    monthly_charge REAL,
+    satisfaction INTEGER,
+    prediction TEXT,
+    probability REAL
+)
+""")
+conn.commit()
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
@@ -199,8 +215,8 @@ df = load_data()
 def normalize_name(text):
     return re.sub(r'[^a-z0-9]', '', str(text).strip().lower())
 
-def find_col(df, possible_names):
-    normalized_cols = {normalize_name(col): col for col in df.columns}
+def find_col(dataframe, possible_names):
+    normalized_cols = {normalize_name(col): col for col in dataframe.columns}
     for name in possible_names:
         key = normalize_name(name)
         if key in normalized_cols:
@@ -357,22 +373,6 @@ def build_input_from_form(
     set_one_hot(input_df, ["PaperlessBilling", "Paperless Billing"], str(paperless_billing))
 
     return input_df
-
-def predict_customer(input_df):
-    if scaler is not None:
-        scaler_cols = list(scaler.feature_names_in_) if hasattr(scaler, "feature_names_in_") else list(input_df.columns)
-        X = input_df.reindex(columns=scaler_cols, fill_value=0)
-        X_scaled = scaler.transform(X)
-    else:
-        X_scaled = input_df.values
-
-    proba = model.predict_proba(X_scaled)[0]
-    classes = list(model.classes_)
-    churn_index = classes.index(1)
-    probability = float(proba[churn_index])
-    prediction = 1 if probability >= 0.5 else 0
-
-    return probability, prediction
 
 # ---------------- AUTH HELPERS ----------------
 def init_auth_state():
@@ -592,6 +592,10 @@ if role == "Admin":
     st.markdown("### 🔍 Dataset Preview")
     st.dataframe(df.head(20), use_container_width=True)
 
+    if st.button("Show Prediction History"):
+        history_df = pd.read_sql_query("SELECT * FROM predictions", conn)
+        st.dataframe(history_df, use_container_width=True)
+
 # ---------------- EMPLOYEE VIEW ----------------
 elif role == "Employee":
     st.subheader("👨‍💼 Employee / Analyst Dashboard")
@@ -652,6 +656,19 @@ elif role == "Employee":
             probability = float(proba[churn_index])
             prediction = 1 if probability >= 0.5 else 0
             prediction_failed = False
+
+            # SAVE TO DATABASE AFTER PREDICTION
+            cursor.execute("""
+            INSERT INTO predictions VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                age,
+                tenure,
+                monthly_charges,
+                0,
+                "Churn" if prediction == 1 else "Loyal",
+                float(probability)
+            ))
+            conn.commit()
 
         except Exception as e:
             probability = 0.0
